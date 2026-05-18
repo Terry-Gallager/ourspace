@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #FFF0F5;
+    --foreground: #4A4A4A;
+    --primary: #FFB6C1;
+    --secondary: #FFDAB9;
+  }
+
+  body {
+    @apply bg-[#FFF0F5] text-[#4A4A4A];
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
