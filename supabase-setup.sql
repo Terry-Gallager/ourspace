@@ -12,7 +12,12 @@ CREATE TABLE IF NOT EXISTS posts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Enable RLS
+-- 2. Grant table-level permissions
+GRANT SELECT ON public.posts TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.posts TO authenticated;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+
+-- 3. Enable RLS
 ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
 
 -- 3. Everyone can read (browse mode)
@@ -47,6 +52,10 @@ ON CONFLICT DO NOTHING;
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('ourspace-images', 'ourspace-images', true)
 ON CONFLICT (id) DO NOTHING;
+
+-- Grant storage permissions
+GRANT SELECT ON storage.objects TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO authenticated;
 
 -- Allow public to view images
 CREATE POLICY "Anyone can view images"
