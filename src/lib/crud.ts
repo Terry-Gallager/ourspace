@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { getSupabaseClient } from './supabase'
 
 export interface Post {
   id: string
@@ -8,8 +8,16 @@ export interface Post {
   updated_at: string
 }
 
+function client() {
+  try {
+    return getSupabaseClient()
+  } catch {
+    throw new Error('Database not configured yet. Please set up environment variables.')
+  }
+}
+
 export async function getPosts(): Promise<Post[]> {
-  const { data, error } = await supabase
+  const { data, error } = await client()
     .from('posts')
     .select('*')
     .order('created_at', { ascending: false })
@@ -19,7 +27,7 @@ export async function getPosts(): Promise<Post[]> {
 }
 
 export async function updatePost(id: string, updates: Partial<Pick<Post, 'image_url' | 'content'>>) {
-  const { error } = await supabase
+  const { error } = await client()
     .from('posts')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', id)
@@ -32,7 +40,7 @@ export async function uploadImage(file: File): Promise<string> {
   const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`
   const filePath = `${fileName}`
 
-  const { error: uploadError } = await supabase.storage
+  const { error: uploadError } = await client().storage
     .from('ourspace-images')
     .upload(filePath, file)
 
@@ -43,7 +51,7 @@ export async function uploadImage(file: File): Promise<string> {
     throw new Error(uploadError.message)
   }
 
-  const { data: { publicUrl } } = supabase.storage
+  const { data: { publicUrl } } = client().storage
     .from('ourspace-images')
     .getPublicUrl(filePath)
 
@@ -51,7 +59,7 @@ export async function uploadImage(file: File): Promise<string> {
 }
 
 export async function createPost(): Promise<Post> {
-  const { data, error } = await supabase
+  const { data, error } = await client()
     .from('posts')
     .insert({ image_url: '', content: 'Write something sweet here...' })
     .select()
@@ -64,5 +72,5 @@ export async function createPost(): Promise<Post> {
 export async function deleteImage(url: string) {
   const path = url.split('/').pop()
   if (!path) return
-  await supabase.storage.from('ourspace-images').remove([path])
+  await client().storage.from('ourspace-images').remove([path])
 }

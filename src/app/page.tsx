@@ -9,7 +9,8 @@ import LoginModal from '@/components/LoginModal'
 import CuteAlert from '@/components/CuteAlert'
 import { useAuth } from '@/context/AuthContext'
 import { getPosts, updatePost, createPost, Post } from '@/lib/crud'
-import { Heart, Camera, Sparkles, Save, Plus, Lock, Unlock, Loader } from 'lucide-react'
+import { Heart, Camera, Sparkles, Save, Plus, LogIn, Unlock, Loader, AlertTriangle } from 'lucide-react'
+import { getSupabaseClient } from '@/lib/supabase'
 
 export default function Home() {
   const { user } = useAuth()
@@ -18,10 +19,19 @@ export default function Home() {
   const [loginOpen, setLoginOpen] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [alert, setAlert] = useState({ open: false, message: '', type: 'success' as 'success' | 'error' })
   const [editableContent, setEditableContent] = useState<Record<string, string>>({})
 
-  useEffect(() => { loadPosts() }, [])
+  useEffect(() => {
+    try {
+      getSupabaseClient()
+      loadPosts()
+    } catch (err: any) {
+      setLoadError(err.message)
+      setLoading(false)
+    }
+  }, [])
 
   const loadPosts = async () => {
     try {
@@ -31,7 +41,7 @@ export default function Home() {
       data.forEach(p => { contentMap[p.id] = p.content })
       setEditableContent(contentMap)
     } catch (err: any) {
-      setAlert({ open: true, message: 'Failed to load posts: ' + err.message, type: 'error' })
+      setLoadError(err.message)
     } finally {
       setLoading(false)
     }
@@ -72,18 +82,61 @@ export default function Home() {
     }
   }
 
+  if (loadError) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-pink-50 to-pink-100/50 flex items-center justify-center p-4">
+        <CuteCard className="max-w-md text-center">
+          <AlertTriangle className="w-12 h-12 text-pink-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-pink-500 mb-2">Oops! Something needs setup</h2>
+          <p className="text-sm text-gray-600 mb-4">{loadError}</p>
+          <p className="text-xs text-gray-400">
+            After configuring, refresh the page to try again.
+          </p>
+        </CuteCard>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-pink-50 to-pink-100/50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
-        <div className="flex justify-end mb-4">
-          {user && (
-            <span className="flex items-center gap-1 text-xs text-pink-400 bg-white/60 px-3 py-1.5 rounded-full">
-              <Unlock className="w-3 h-3" />
-              Edit Mode
-            </span>
-          )}
+        {/* Top bar */}
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            {user && (
+              <button
+                onClick={async () => {
+                  const supabase = getSupabaseClient()
+                  await supabase.auth.signOut()
+                }}
+                className="text-xs text-pink-400 underline underline-offset-2"
+              >
+                Sign out
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {user ? (
+              <span className="flex items-center gap-1 text-xs text-pink-400 bg-white/60 px-3 py-1.5 rounded-full">
+                <Unlock className="w-3 h-3" />
+                Edit Mode
+              </span>
+            ) : (
+              <SweetButton
+                variant="secondary"
+                onClick={() => setLoginOpen(true)}
+                className="text-xs px-4 py-2"
+              >
+                <span className="flex items-center gap-1">
+                  <LogIn className="w-3 h-3" />
+                  Sign In
+                </span>
+              </SweetButton>
+            )}
+          </div>
         </div>
 
+        {/* Welcome Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -127,6 +180,9 @@ export default function Home() {
                   {creating ? 'Creating...' : 'Add First Memory'}
                 </span>
               </SweetButton>
+            )}
+            {!user && (
+              <p className="text-sm text-pink-300">Sign in to start adding memories</p>
             )}
           </CuteCard>
         ) : (
@@ -212,15 +268,12 @@ export default function Home() {
         )}
 
         <div className="text-center pb-8">
-          <div
-            onDoubleClick={() => setLoginOpen(true)}
-            className="inline-block cursor-pointer select-none"
-          >
+          <div className="inline-block cursor-pointer select-none">
             <motion.div
               whileHover={{ scale: 1.1 }}
               className="flex flex-col items-center gap-2 text-pink-300"
             >
-              {user ? <Lock className="w-6 h-6" /> : <Heart className="w-6 h-6" />}
+              <Heart className="w-6 h-6" />
               <span className="text-xs">Made with love</span>
             </motion.div>
           </div>
