@@ -66,3 +66,10 @@ ON CONFLICT DO NOTHING;
 INSERT INTO gallery_posts (image_url, date, description)
 VALUES ('/placeholder.svg', '2026-02-28', '在一起的第一天')
 ON CONFLICT DO NOTHING;
+
+-- ============================================
+-- Migration: Add video support columns
+-- Run this if gallery_posts already exists
+-- ============================================
+ALTER TABLE gallery_posts ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE gallery_posts ADD COLUMN IF NOT EXISTS cover_url TEXT;

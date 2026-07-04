@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
+import MotionPhoto from './MotionPhoto'
 import { Heart, Upload } from 'lucide-react'
-import { uploadImage } from '@/lib/crud'
+import { uploadFile } from '@/lib/supabase-api'
 import CuteAlert from './CuteAlert'
 
 interface PhotoFrameProps {
@@ -13,6 +14,8 @@ interface PhotoFrameProps {
   caption?: string
   editable?: boolean
   onImageChange?: (url: string) => void
+  videoUrl?: string | null
+  coverUrl?: string | null
   className?: string
 }
 
@@ -22,6 +25,8 @@ export default function PhotoFrame({
   caption = '',
   editable = false,
   onImageChange,
+  videoUrl,
+  coverUrl,
   className = ''
 }: PhotoFrameProps) {
   const [uploading, setUploading] = useState(false)
@@ -33,7 +38,8 @@ export default function PhotoFrame({
 
     setUploading(true)
     try {
-      const url = await uploadImage(file)
+      const folder = file.type.startsWith('video/') ? 'videos' : 'images'
+      const url = await uploadFile(file, folder)
       onImageChange?.(url)
     } catch (err: any) {
       setAlert({ open: true, message: err.message })
@@ -59,6 +65,8 @@ export default function PhotoFrame({
             </motion.div>
             <p className="mt-2 text-sm text-pink-400">Uploading...</p>
           </div>
+        ) : videoUrl ? (
+          <MotionPhoto src={coverUrl || src} videoUrl={videoUrl} alt={alt} />
         ) : src ? (
           <Image src={src} alt={alt} fill className="object-cover" />
         ) : (
@@ -68,13 +76,13 @@ export default function PhotoFrame({
         )}
 
         {editable && !uploading && (
-          <label className="absolute top-2 right-2 cursor-pointer">
+          <label className="absolute top-2 right-2 cursor-pointer z-30">
             <div className="bg-white/80 backdrop-blur-sm rounded-full p-2 shadow-soft hover:bg-white transition-colors">
               <Upload className="w-4 h-4 text-pink-400" />
             </div>
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,video/mp4,video/quicktime,.mov"
               onChange={handleUpload}
               className="hidden"
             />

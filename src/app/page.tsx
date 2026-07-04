@@ -14,9 +14,9 @@ import FloatingAddButton from '@/components/FloatingAddButton'
 import CuteAlert from '@/components/CuteAlert'
 import { useAuth } from '@/context/AuthContext'
 import { getSupabaseClient } from '@/lib/supabase'
-import { getPosts, updatePost, createPost, uploadImage, Post } from '@/lib/crud'
+import { getPosts, updatePost, createPost, Post } from '@/lib/crud'
 import {
-  fetchGallery, updateGalleryPost, deleteGalleryPost, uploadImage as uploadGalleryImage,
+  fetchGallery, updateGalleryPost, deleteGalleryPost,
   fetchMilestones, updateMilestone, deleteMilestone,
   GalleryPost, Milestone,
 } from '@/lib/supabase-api'
@@ -341,6 +341,8 @@ export default function Home() {
                         src={g.image_url || '/placeholder.svg'}
                         alt={g.description}
                         editable={!!user}
+                        videoUrl={g.video_url}
+                        coverUrl={g.cover_url}
                         onImageChange={url => handleGalleryImageChange(g.id, url)}
                       />
                       {editingGallery === g.id ? (

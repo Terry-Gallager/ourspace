@@ -2,8 +2,8 @@
 
 import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Camera, Star, Loader, Heart, ImagePlus } from 'lucide-react'
-import { addGalleryPost, uploadImage, addMilestone } from '@/lib/supabase-api'
+import { X, Camera, Star, Loader, Heart, ImagePlus, Film } from 'lucide-react'
+import { addGalleryPost, uploadFile, extractVideoFrame, addMilestone } from '@/lib/supabase-api'
 import { createPost } from '@/lib/crud'
 import SweetButton from './SweetButton'
 import CuteAlert from './CuteAlert'
@@ -25,8 +25,9 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
   const [milestoneTitle, setMilestoneTitle] = useState('')
   const [milestoneDesc, setMilestoneDesc] = useState('')
   const [milestoneIcon, setMilestoneIcon] = useState('💖')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [isVideo, setIsVideo] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [alert, setAlert] = useState({ open: false, message: '', type: 'success' as 'success' | 'error' })
   const fileRef = useRef<HTMLInputElement>(null)
@@ -37,17 +38,19 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
     setMilestoneTitle('')
     setMilestoneDesc('')
     setMilestoneIcon('💖')
-    setImageFile(null)
-    setImagePreview(null)
+    setFile(null)
+    setPreview(null)
+    setIsVideo(false)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImageFile(file)
+    const f = e.target.files?.[0]
+    if (!f) return
+    setFile(f)
+    setIsVideo(f.type.startsWith('video/'))
     const reader = new FileReader()
-    reader.onload = () => setImagePreview(reader.result as string)
-    reader.readAsDataURL(file)
+    reader.onload = () => setPreview(reader.result as string)
+    reader.readAsDataURL(f)
   }
 
   const handleSubmit = async () => {
@@ -55,11 +58,25 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
     try {
       if (tab === 'photo') {
         let imageUrl = ''
-        if (imageFile) {
-          imageUrl = await uploadImage(imageFile)
+        let videoUrl: string | null = null
+        let coverUrl: string | null = null
+
+        if (file) {
+          if (isVideo) {
+            videoUrl = await uploadFile(file, 'videos')
+            const coverBlob = await extractVideoFrame(file)
+            if (coverBlob) {
+              const coverFile = new File([coverBlob], 'cover.jpg', { type: 'image/jpeg' })
+              coverUrl = await uploadFile(coverFile, 'covers')
+            }
+            imageUrl = coverUrl || videoUrl
+          } else {
+            imageUrl = await uploadFile(file, 'images')
+          }
         }
-        await addGalleryPost({ image_url: imageUrl, date, description })
-        setAlert({ open: true, message: 'Photo posted! 📸', type: 'success' })
+
+        await addGalleryPost({ image_url: imageUrl, date, description, video_url: videoUrl, cover_url: coverUrl })
+        setAlert({ open: true, message: isVideo ? 'Motion Photo posted! 📸' : 'Photo posted! 📸', type: 'success' })
       } else {
         await addMilestone({ date, title: milestoneTitle, description: milestoneDesc, icon: milestoneIcon })
         setAlert({ open: true, message: 'Milestone added! ✨', type: 'success' })
@@ -131,15 +148,33 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
 
               {tab === 'photo' ? (
                 <>
-                  {/* Image upload */}
+                  {/* File upload - image or video */}
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">照片</label>
-                    <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                    {imagePreview ? (
+                    <label className="text-xs text-gray-500 block mb-1">
+                      {isVideo ? '视频' : '照片'}
+                    </label>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept="image/*,video/mp4,video/quicktime,.mov"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    {preview ? (
                       <div className="relative rounded-2xl overflow-hidden border border-pink-200">
-                        <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover" />
-                        <button onClick={() => { setImageFile(null); setImagePreview(null) }}
-                          className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center">
+                        {isVideo ? (
+                          <video src={preview} className="w-full h-48 object-cover" muted autoPlay loop playsInline />
+                        ) : (
+                          <img src={preview} alt="Preview" className="w-full h-48 object-cover" />
+                        )}
+                        {isVideo && (
+                          <div className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm rounded-full px-2 py-0.5 flex items-center gap-1 text-xs text-pink-500">
+                            <Film className="w-3 h-3" />
+                            Motion
+                          </div>
+                        )}
+                        <button onClick={() => { setFile(null); setPreview(null); setIsVideo(false) }}
+                          className="absolute top-2 left-2 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center">
                           <X className="w-4 h-4 text-pink-400" />
                         </button>
                       </div>
@@ -149,7 +184,7 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
                                    flex flex-col items-center justify-center gap-2 text-pink-300 
                                    hover:border-pink-400 hover:text-pink-400 transition-colors">
                         <ImagePlus className="w-8 h-8" />
-                        <span className="text-sm">点击上传照片</span>
+                        <span className="text-sm">点击上传照片或视频</span>
                       </button>
                     )}
                   </div>

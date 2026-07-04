@@ -1,0 +1,91 @@
+'use client'
+
+import { useRef, useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import Image from 'next/image'
+import { Play, Film } from 'lucide-react'
+
+interface MotionPhotoProps {
+  src: string
+  videoUrl?: string | null
+  alt: string
+  className?: string
+}
+
+export default function MotionPhoto({ src, videoUrl, alt, className = '' }: MotionPhotoProps) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [playing, setPlaying] = useState(false)
+
+  // Reset when videoUrl changes
+  useEffect(() => {
+    setPlaying(false)
+  }, [videoUrl])
+
+  const handlePlay = () => {
+    if (!videoUrl || !videoRef.current) return
+    setPlaying(true)
+    videoRef.current.play().catch(() => setPlaying(false))
+  }
+
+  const handleEnded = () => {
+    setPlaying(false)
+  }
+
+  // Static mode
+  if (!videoUrl) {
+    return (
+      <div className={`relative w-full h-full ${className}`}>
+        <Image src={src} alt={alt} fill className="object-cover" />
+      </div>
+    )
+  }
+
+  return (
+    <div className={`relative w-full h-full overflow-hidden ${className}`}>
+      {/* Cover image (shown when not playing) */}
+      {!playing && (
+        <motion.div
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-10 cursor-pointer"
+          onClick={handlePlay}
+        >
+          <Image src={src} alt={alt} fill className="object-cover pointer-events-none" />
+
+          {/* Play button overlay */}
+          <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-lg">
+              <Play className="w-6 h-6 text-pink-500 ml-0.5" />
+            </div>
+          </div>
+
+          {/* Video badge */}
+          <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-white/70 backdrop-blur-sm rounded-full px-2 py-0.5 text-xs text-pink-500">
+            <Film className="w-3 h-3" />
+            <span>Live</span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Video element (shown when playing) */}
+      {playing && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="absolute inset-0 z-20"
+        >
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            autoPlay
+            muted
+            playsInline
+            controls
+            onEnded={handleEnded}
+            className="w-full h-full object-cover"
+          />
+        </motion.div>
+      )}
+    </div>
+  )
+}
