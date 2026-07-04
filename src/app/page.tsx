@@ -18,6 +18,7 @@ import { getPosts, updatePost, createPost, Post } from '@/lib/crud'
 import {
   fetchGallery, updateGalleryPost, deleteGalleryPost,
   fetchMilestones, updateMilestone, deleteMilestone,
+  uploadFile, extractVideoFrame,
   GalleryPost, Milestone,
 } from '@/lib/supabase-api'
 import {
@@ -42,6 +43,7 @@ export default function Home() {
   const [editContent, setEditContent] = useState<Record<string, string>>({})
   const [editDate, setEditDate] = useState<Record<string, string>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [uploadingGallery, setUploadingGallery] = useState<string | null>(null)
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'post' | 'gallery' | 'milestone'; id: string } | null>(null)
@@ -98,12 +100,48 @@ export default function Home() {
     finally { setSavingId(null) }
   }
 
-  const handleGalleryImageChange = async (id: string, url: string) => {
+  const handleGalleryImageChange = async (id: string, url: string, coverUrl?: string) => {
     try {
-      await updateGalleryPost(id, { image_url: url })
+      if (coverUrl) {
+        await updateGalleryPost(id, { video_url: url, cover_url: coverUrl })
+      } else {
+        await updateGalleryPost(id, { image_url: url })
+      }
       showMsg('Photo replaced! 📸')
       await loadAll()
     } catch (e: any) { showMsg(e.message, 'error') }
+  }
+
+  const handleReplaceVideo = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingGallery(id)
+    try {
+      const url = await uploadFile(file, 'videos')
+      const coverBlob = await extractVideoFrame(file)
+      let coverUrl: string | null = null
+      if (coverBlob) {
+        const coverFile = new File([coverBlob], 'cover.jpg', { type: 'image/jpeg' })
+        coverUrl = await uploadFile(coverFile, 'covers')
+      }
+      await updateGalleryPost(id, { video_url: url, cover_url: coverUrl })
+      showMsg('Video updated! 🎬')
+      await loadAll()
+    } catch (e: any) { showMsg(e.message, 'error') }
+    finally { setUploadingGallery(null) }
+  }
+
+  const handleReplaceCover = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingGallery(id)
+    try {
+      const url = await uploadFile(file, 'covers')
+      await updateGalleryPost(id, { cover_url: url })
+      showMsg('Cover updated! 🖼️')
+      await loadAll()
+    } catch (e: any) { showMsg(e.message, 'error') }
+    finally { setUploadingGallery(null) }
   }
 
   // === Milestone handlers ===
@@ -356,6 +394,26 @@ export default function Home() {
                             className="w-full px-2 py-1 rounded-lg border border-pink-200 bg-white/60 
                                        focus:outline-none focus:ring-2 focus:ring-pink-300 text-xs"
                             placeholder="Description" />
+                          <div className="flex gap-2">
+                            <label className="flex-1 cursor-pointer">
+                              <div className="text-center text-xs bg-pink-50 rounded-lg py-2 border border-pink-200 hover:bg-pink-100 transition-colors">
+                                {uploadingGallery === g.id ? 'Uploading...' : g.video_url ? 'Replace Video' : 'Add Video'}
+                              </div>
+                              <input type="file" accept="video/mp4,video/quicktime,.mov"
+                                onChange={e => handleReplaceVideo(g.id, e)}
+                                className="hidden" />
+                            </label>
+                            {g.video_url && (
+                              <label className="flex-1 cursor-pointer">
+                                <div className="text-center text-xs bg-pink-50 rounded-lg py-2 border border-pink-200 hover:bg-pink-100 transition-colors">
+                                  {uploadingGallery === g.id ? '...' : 'Replace Cover'}
+                                </div>
+                                <input type="file" accept="image/*"
+                                  onChange={e => handleReplaceCover(g.id, e)}
+                                  className="hidden" />
+                              </label>
+                            )}
+                          </div>
                           <button onClick={() => handleSaveGallery(g.id)}
                             className="w-full text-xs cute-button py-1">
                             {savingId === g.id ? 'Saving...' : 'Save'}

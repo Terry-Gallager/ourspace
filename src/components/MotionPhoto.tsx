@@ -22,9 +22,8 @@ export default function MotionPhoto({ src, videoUrl, alt, className = '' }: Moti
   }, [videoUrl])
 
   const handlePlay = () => {
-    if (!videoUrl || !videoRef.current) return
+    if (!videoUrl) return
     setPlaying(true)
-    videoRef.current.play().catch(() => setPlaying(false))
   }
 
   const handleEnded = () => {

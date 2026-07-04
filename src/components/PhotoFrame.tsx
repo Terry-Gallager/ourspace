@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import Image from 'next/image'
 import MotionPhoto from './MotionPhoto'
 import { Heart, Upload } from 'lucide-react'
-import { uploadFile } from '@/lib/supabase-api'
+import { uploadFile, extractVideoFrame } from '@/lib/supabase-api'
 import CuteAlert from './CuteAlert'
 
 interface PhotoFrameProps {
@@ -13,7 +13,7 @@ interface PhotoFrameProps {
   alt: string
   caption?: string
   editable?: boolean
-  onImageChange?: (url: string) => void
+  onImageChange?: (url: string, coverUrl?: string) => void
   videoUrl?: string | null
   coverUrl?: string | null
   className?: string
@@ -38,9 +38,19 @@ export default function PhotoFrame({
 
     setUploading(true)
     try {
-      const folder = file.type.startsWith('video/') ? 'videos' : 'images'
-      const url = await uploadFile(file, folder)
-      onImageChange?.(url)
+      if (file.type.startsWith('video/')) {
+        const url = await uploadFile(file, 'videos')
+        const coverBlob = await extractVideoFrame(file)
+        let coverUrl: string | undefined
+        if (coverBlob) {
+          const coverFile = new File([coverBlob], 'cover.jpg', { type: 'image/jpeg' })
+          coverUrl = await uploadFile(coverFile, 'covers')
+        }
+        onImageChange?.(url, coverUrl)
+      } else {
+        const url = await uploadFile(file, 'images')
+        onImageChange?.(url)
+      }
     } catch (err: any) {
       setAlert({ open: true, message: err.message })
     } finally {
