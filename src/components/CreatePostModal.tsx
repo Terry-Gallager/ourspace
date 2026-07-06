@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Camera, Star, Loader, Heart, ImagePlus, Film } from 'lucide-react'
-import { addGalleryPost, uploadFile, extractVideoFrame, addMilestone } from '@/lib/supabase-api'
+import { uploadFile, extractVideoFrame, addAlbum, addMilestone } from '@/lib/supabase-api'
 import { createPost } from '@/lib/crud'
 import SweetButton from './SweetButton'
 import CuteAlert from './CuteAlert'
@@ -25,9 +25,9 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
   const [milestoneTitle, setMilestoneTitle] = useState('')
   const [milestoneDesc, setMilestoneDesc] = useState('')
   const [milestoneIcon, setMilestoneIcon] = useState('💖')
-  const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
-  const [isVideo, setIsVideo] = useState(false)
+  const [files, setFiles] = useState<File[]>([])
+  const [previews, setPreviews] = useState<{ url: string; isVideo: boolean }[]>([])
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [alert, setAlert] = useState({ open: false, message: '', type: 'success' as 'success' | 'error' })
   const fileRef = useRef<HTMLInputElement>(null)
@@ -38,48 +38,75 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
     setMilestoneTitle('')
     setMilestoneDesc('')
     setMilestoneIcon('💖')
-    setFile(null)
-    setPreview(null)
-    setIsVideo(false)
+    setFiles([])
+    setPreviews([])
+    setUploadProgress(null)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    setFile(f)
-    setIsVideo(f.type.startsWith('video/'))
-    const reader = new FileReader()
-    reader.onload = () => setPreview(reader.result as string)
-    reader.readAsDataURL(f)
+    const selected = Array.from(e.target.files || [])
+    if (selected.length === 0) return
+
+    setFiles(prev => [...prev, ...selected])
+
+    selected.forEach(f => {
+      const isVideo = f.type.startsWith('video/')
+      const reader = new FileReader()
+      reader.onload = () => {
+        setPreviews(prev => [...prev, { url: reader.result as string, isVideo }])
+      }
+      reader.readAsDataURL(f)
+    })
+  }
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index))
+    setPreviews(prev => {
+      const newPreviews = [...prev]
+      URL.revokeObjectURL(newPreviews[index].url)
+      newPreviews.splice(index, 1)
+      return newPreviews
+    })
   }
 
   const handleSubmit = async () => {
     setSubmitting(true)
     try {
       if (tab === 'photo') {
-        let imageUrl = ''
-        let videoUrl: string | null = null
-        let coverUrl: string | null = null
+        if (files.length === 0) {
+          setAlert({ open: true, message: '请至少选择一张照片', type: 'error' })
+          setSubmitting(false)
+          return
+        }
 
-        if (file) {
+        const items: { file_type: 'image' | 'video'; file_url: string; cover_url?: string | null }[] = []
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i]
+          const isVideo = file.type.startsWith('video/')
+          setUploadProgress(`上传中 ${i + 1}/${files.length}...`)
+
           if (isVideo) {
-            videoUrl = await uploadFile(file, 'videos')
+            const url = await uploadFile(file, 'videos')
             const coverBlob = await extractVideoFrame(file)
+            let coverUrl: string | null = null
             if (coverBlob) {
               const coverFile = new File([coverBlob], 'cover.jpg', { type: 'image/jpeg' })
               coverUrl = await uploadFile(coverFile, 'covers')
             }
-            imageUrl = coverUrl || videoUrl
+            items.push({ file_type: 'video', file_url: url, cover_url: coverUrl })
           } else {
-            imageUrl = await uploadFile(file, 'images')
+            const url = await uploadFile(file, 'images')
+            items.push({ file_type: 'image', file_url: url })
           }
         }
 
-        await addGalleryPost({ image_url: imageUrl, date, description, video_url: videoUrl, cover_url: coverUrl })
-        setAlert({ open: true, message: isVideo ? 'Motion Photo posted! 📸' : 'Photo posted! 📸', type: 'success' })
+        setUploadProgress('创建相册...')
+        await addAlbum({ cover_url: items[0].file_url, date, description }, items)
+        setAlert({ open: true, message: '相册已发布! 📸', type: 'success' })
       } else {
         await addMilestone({ date, title: milestoneTitle, description: milestoneDesc, icon: milestoneIcon })
-        setAlert({ open: true, message: 'Milestone added! ✨', type: 'success' })
+        setAlert({ open: true, message: '纪念日记录成功! ✨', type: 'success' })
       }
       resetForm()
       onCreated()
@@ -88,6 +115,7 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
       setAlert({ open: true, message: e.message, type: 'error' })
     } finally {
       setSubmitting(false)
+      setUploadProgress(null)
     }
   }
 
@@ -114,7 +142,7 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
             {/* Header */}
             <div className="flex items-center justify-between p-5 border-b border-pink-100">
               <h2 className="text-lg font-bold text-pink-500 flex items-center gap-2">
-                <Heart className="w-5 h-5" /> New Memory
+                <Heart className="w-5 h-5" /> 新记忆
               </h2>
               <button onClick={onClose} className="text-pink-300 hover:text-pink-500">
                 <X className="w-6 h-6" />
@@ -131,7 +159,7 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
                     ${tab === t ? 'text-pink-500 border-b-2 border-pink-400 bg-pink-50/50' : 'text-gray-400'}`}
                 >
                   {t === 'photo' ? <Camera className="w-4 h-4" /> : <Star className="w-4 h-4" />}
-                  {t === 'photo' ? '发照片' : '记纪念日'}
+                  {t === 'photo' ? '传照片' : '记纪念日'}
                 </button>
               ))}
             </div>
@@ -148,34 +176,44 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
 
               {tab === 'photo' ? (
                 <>
-                  {/* File upload - image or video */}
+                  {/* File upload - multiple images or videos */}
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">
-                      {isVideo ? '视频' : '照片'}
+                      照片/视频（可选多个）
                     </label>
                     <input
                       ref={fileRef}
                       type="file"
+                      multiple
                       accept="image/*,video/mp4,video/quicktime,.mov"
                       onChange={handleFileChange}
                       className="hidden"
                     />
-                    {preview ? (
-                      <div className="relative rounded-2xl overflow-hidden border border-pink-200">
-                        {isVideo ? (
-                          <video src={preview} className="w-full h-48 object-cover" muted autoPlay loop playsInline />
-                        ) : (
-                          <img src={preview} alt="Preview" className="w-full h-48 object-cover" />
-                        )}
-                        {isVideo && (
-                          <div className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm rounded-full px-2 py-0.5 flex items-center gap-1 text-xs text-pink-500">
-                            <Film className="w-3 h-3" />
-                            Motion
+                    {previews.length > 0 ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {previews.map((p, i) => (
+                          <div key={i} className="relative rounded-xl overflow-hidden border border-pink-200 aspect-square">
+                            {p.isVideo ? (
+                              <video src={p.url} className="w-full h-full object-cover" muted autoPlay loop playsInline />
+                            ) : (
+                              <img src={p.url} alt="" className="w-full h-full object-cover" />
+                            )}
+                            {p.isVideo && (
+                              <div className="absolute top-1 right-1 bg-white/80 rounded-full px-1.5 py-0.5">
+                                <Film className="w-3 h-3 text-pink-500" />
+                              </div>
+                            )}
+                            <button onClick={() => removeFile(i)}
+                              className="absolute top-1 left-1 w-6 h-6 rounded-full bg-white/80 flex items-center justify-center">
+                              <X className="w-3 h-3 text-pink-400" />
+                            </button>
                           </div>
-                        )}
-                        <button onClick={() => { setFile(null); setPreview(null); setIsVideo(false) }}
-                          className="absolute top-2 left-2 w-8 h-8 rounded-full bg-white/80 flex items-center justify-center">
-                          <X className="w-4 h-4 text-pink-400" />
+                        ))}
+                        <button onClick={() => fileRef.current?.click()}
+                          className="aspect-square rounded-xl border-2 border-dashed border-pink-200 
+                                     flex items-center justify-center text-pink-300 
+                                     hover:border-pink-400 hover:text-pink-400 transition-colors">
+                          <ImagePlus className="w-6 h-6" />
                         </button>
                       </div>
                     ) : (
@@ -184,7 +222,7 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
                                    flex flex-col items-center justify-center gap-2 text-pink-300 
                                    hover:border-pink-400 hover:text-pink-400 transition-colors">
                         <ImagePlus className="w-8 h-8" />
-                        <span className="text-sm">点击上传照片或视频</span>
+                        <span className="text-sm">点击选择照片或视频（可多选）</span>
                       </button>
                     )}
                   </div>
@@ -246,7 +284,7 @@ export default function CreatePostModal({ open, onClose, onCreated }: CreatePost
                 ) : (
                   <Heart className="w-5 h-5" />
                 )}
-                {submitting ? '发布中...' : '发布'}
+                {uploadProgress || (submitting ? '发布中...' : '发布')}
               </SweetButton>
             </div>
           </motion.div>

@@ -177,6 +177,120 @@ export async function deleteGalleryPost(id: string): Promise<void> {
 }
 
 // ============================================
+// Gallery Albums CRUD
+// ============================================
+export interface GalleryAlbum {
+  id: string
+  cover_url: string
+  date: string
+  description: string
+  created_at: string
+}
+
+export interface GalleryItem {
+  id: string
+  album_id: string
+  sort_order: number
+  file_type: 'image' | 'video'
+  file_url: string
+  cover_url: string | null
+  created_at: string
+}
+
+export async function fetchAlbums(): Promise<GalleryAlbum[]> {
+  const { data, error } = await client()
+    .from('gallery_albums')
+    .select('*')
+    .order('date', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+export async function addAlbum(
+  album: Omit<GalleryAlbum, 'id' | 'created_at'>,
+  items: { file_type: 'image' | 'video'; file_url: string; cover_url?: string | null }[]
+): Promise<GalleryAlbum> {
+  const { data, error } = await client()
+    .from('gallery_albums')
+    .insert(album)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  const albumItems = items.map((item, i) => ({
+    album_id: data.id,
+    sort_order: i,
+    file_type: item.file_type,
+    file_url: item.file_url,
+    cover_url: item.cover_url || null,
+  }))
+
+  const { error: itemErr } = await client()
+    .from('gallery_items')
+    .insert(albumItems)
+
+  if (itemErr) throw new Error(itemErr.message)
+
+  return data
+}
+
+export async function updateAlbum(
+  id: string,
+  updates: Partial<Pick<GalleryAlbum, 'cover_url' | 'date' | 'description'>>
+): Promise<void> {
+  const { error } = await client()
+    .from('gallery_albums')
+    .update(updates)
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+}
+
+export async function deleteAlbum(id: string): Promise<void> {
+  const { data, error: fetchErr } = await client()
+    .from('gallery_items')
+    .select('file_url, cover_url')
+    .eq('album_id', id)
+
+  if (fetchErr) throw new Error(fetchErr.message)
+
+  if (data) {
+    const urls = data.flatMap(i => [i.file_url, i.cover_url].filter(Boolean))
+    await Promise.all(urls.map(url => deleteStorageFileByUrl(url)))
+  }
+
+  const { error } = await client()
+    .from('gallery_albums')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+}
+
+export async function fetchAllAlbumItems(): Promise<GalleryItem[]> {
+  const { data, error } = await client()
+    .from('gallery_items')
+    .select('*')
+    .order('sort_order', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+export async function fetchAlbumItems(albumId: string): Promise<GalleryItem[]> {
+  const { data, error } = await client()
+    .from('gallery_items')
+    .select('*')
+    .eq('album_id', albumId)
+    .order('sort_order', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+// ============================================
 // Milestones CRUD
 // ============================================
 export async function fetchMilestones(): Promise<Milestone[]> {

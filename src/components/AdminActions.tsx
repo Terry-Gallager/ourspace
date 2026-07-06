@@ -36,15 +36,15 @@ export default function AdminActions({
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={onEdit}
-          className="w-11 h-11 rounded-full bg-white/80 backdrop-blur-sm border border-pink-200 
+          className="w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm border border-pink-200 
                      flex items-center justify-center text-pink-400 shadow-soft 
                      hover:bg-pink-50 transition-colors"
           title="Edit"
         >
           {saving ? (
-            <Loader className="w-5 h-5 animate-spin" />
+            <Loader className="w-3.5 h-3.5 animate-spin" />
           ) : (
-            <Pencil className="w-5 h-5" />
+            <Pencil className="w-3.5 h-3.5" />
           )}
         </motion.button>
       )}
@@ -52,15 +52,15 @@ export default function AdminActions({
         whileTap={{ scale: 0.9 }}
         onClick={handleDelete}
         disabled={deleting}
-        className="w-11 h-11 rounded-full bg-white/80 backdrop-blur-sm border border-red-200 
+        className="w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm border border-red-200 
                    flex items-center justify-center text-red-400 shadow-soft 
                    hover:bg-red-50 transition-colors disabled:opacity-50"
         title="Delete"
       >
         {deleting ? (
-          <Loader className="w-5 h-5 animate-spin" />
+          <Loader className="w-3.5 h-3.5 animate-spin" />
         ) : (
-          <Trash2 className="w-5 h-5" />
+          <Trash2 className="w-3.5 h-3.5" />
         )}
       </motion.button>
     </div>

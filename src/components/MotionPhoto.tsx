@@ -3,16 +3,17 @@
 import { useRef, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
-import { Play, Film } from 'lucide-react'
+import { Play, Film, Expand } from 'lucide-react'
 
 interface MotionPhotoProps {
   src: string
   videoUrl?: string | null
   alt: string
   className?: string
+  onView?: () => void
 }
 
-export default function MotionPhoto({ src, videoUrl, alt, className = '' }: MotionPhotoProps) {
+export default function MotionPhoto({ src, videoUrl, alt, className = '', onView }: MotionPhotoProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [playing, setPlaying] = useState(false)
 
@@ -53,10 +54,19 @@ export default function MotionPhoto({ src, videoUrl, alt, className = '' }: Moti
 
           {/* Play button overlay */}
           <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
-            <div className="w-12 h-12 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-lg">
-              <Play className="w-6 h-6 text-pink-500 ml-0.5" />
+            <div className="w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-lg">
+              <Play className="w-4 h-4 text-pink-500 ml-0.5" />
             </div>
           </div>
+
+          {/* Expand button */}
+          {onView && (
+            <button onClick={e => { e.stopPropagation(); onView() }}
+              className="absolute top-2 left-2 z-20 w-7 h-7 rounded-full bg-white/70 backdrop-blur-sm 
+                         flex items-center justify-center text-pink-400 hover:bg-white transition-colors">
+              <Expand className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Video badge */}
           <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-white/70 backdrop-blur-sm rounded-full px-2 py-0.5 text-xs text-pink-500">

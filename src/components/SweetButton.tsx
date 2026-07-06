@@ -18,7 +18,7 @@ export default function SweetButton({
   variant = 'primary',
   disabled = false,
 }: SweetButtonProps) {
-  const baseStyles = 'font-semibold rounded-full px-6 py-3 transition-all duration-200'
+  const baseStyles = 'font-semibold rounded-full px-4 py-2 text-sm transition-all duration-200'
   const variantStyles = {
     primary: 'bg-gradient-to-r from-pink-300 to-pink-400 text-white shadow-soft hover:shadow-glow',
     secondary: 'bg-white text-pink-400 border-2 border-pink-300 shadow-soft hover:bg-pink-50',

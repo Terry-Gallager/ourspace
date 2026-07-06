@@ -14,6 +14,7 @@ interface PhotoFrameProps {
   caption?: string
   editable?: boolean
   onImageChange?: (url: string, coverUrl?: string) => void
+  onView?: () => void
   videoUrl?: string | null
   coverUrl?: string | null
   className?: string
@@ -25,6 +26,7 @@ export default function PhotoFrame({
   caption = '',
   editable = false,
   onImageChange,
+  onView,
   videoUrl,
   coverUrl,
   className = ''
@@ -76,9 +78,11 @@ export default function PhotoFrame({
             <p className="mt-2 text-sm text-pink-400">Uploading...</p>
           </div>
         ) : videoUrl ? (
-          <MotionPhoto src={coverUrl || src} videoUrl={videoUrl} alt={alt} />
+          <MotionPhoto src={coverUrl || src} videoUrl={videoUrl} alt={alt} onView={onView} />
         ) : src ? (
-          <Image src={src} alt={alt} fill className="object-cover" />
+          <button className="absolute inset-0 w-full h-full" onClick={onView}>
+            <Image src={src} alt={alt} fill className="object-cover pointer-events-none" />
+          </button>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-pink-300">
             <Heart className="w-12 h-12" />
@@ -86,7 +90,7 @@ export default function PhotoFrame({
         )}
 
         {editable && !uploading && (
-          <label className="absolute top-2 right-2 cursor-pointer z-30">
+          <label className="absolute top-2 right-2 cursor-pointer z-30" onClick={e => e.stopPropagation()}>
             <div className="bg-white/80 backdrop-blur-sm rounded-full p-2 shadow-soft hover:bg-white transition-colors">
               <Upload className="w-4 h-4 text-pink-400" />
             </div>

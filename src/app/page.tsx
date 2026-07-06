@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import CuteCard from '@/components/CuteCard'
 import SweetButton from '@/components/SweetButton'
-import PhotoFrame from '@/components/PhotoFrame'
+import GalleryAlbumCard from '@/components/GalleryAlbumCard'
 import LoveTimer from '@/components/LoveTimer'
 import AdminActions from '@/components/AdminActions'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
@@ -12,14 +12,14 @@ import LoginModal from '@/components/LoginModal'
 import CreatePostModal from '@/components/CreatePostModal'
 import FloatingAddButton from '@/components/FloatingAddButton'
 import CuteAlert from '@/components/CuteAlert'
+import MediaLightbox, { LightboxItem } from '@/components/MediaLightbox'
 import { useAuth } from '@/context/AuthContext'
 import { getSupabaseClient } from '@/lib/supabase'
 import { getPosts, updatePost, createPost, Post } from '@/lib/crud'
 import {
-  fetchGallery, updateGalleryPost, deleteGalleryPost,
+  fetchAlbums, fetchAllAlbumItems, deleteAlbum, fetchAlbumItems, updateAlbum,
   fetchMilestones, updateMilestone, deleteMilestone,
-  uploadFile, extractVideoFrame,
-  GalleryPost, Milestone,
+  GalleryAlbum, GalleryItem, Milestone,
 } from '@/lib/supabase-api'
 import {
   Heart, Camera, Sparkles, Save, Plus, LogIn, Unlock, Loader, AlertTriangle, Calendar, Star,
@@ -28,7 +28,8 @@ import {
 export default function Home() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
-  const [gallery, setGallery] = useState<GalleryPost[]>([])
+  const [albums, setAlbums] = useState<GalleryAlbum[]>([])
+  const [albumItems, setAlbumItems] = useState<GalleryItem[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -38,12 +39,16 @@ export default function Home() {
 
   // Editing state
   const [editingPost, setEditingPost] = useState<string | null>(null)
-  const [editingGallery, setEditingGallery] = useState<string | null>(null)
+  const [editingAlbum, setEditingAlbum] = useState<string | null>(null)
   const [editingMilestone, setEditingMilestone] = useState<string | null>(null)
   const [editContent, setEditContent] = useState<Record<string, string>>({})
   const [editDate, setEditDate] = useState<Record<string, string>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
-  const [uploadingGallery, setUploadingGallery] = useState<string | null>(null)
+
+  // Lightbox
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [lightboxItems, setLightboxItems] = useState<LightboxItem[]>([])
+  const [lightboxIndex, setLightboxIndex] = useState(0)
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'post' | 'gallery' | 'milestone'; id: string } | null>(null)
@@ -55,9 +60,10 @@ export default function Home() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [p, g, m] = await Promise.all([getPosts(), fetchGallery(), fetchMilestones()])
+      const [p, a, ai, m] = await Promise.all([getPosts(), fetchAlbums(), fetchAllAlbumItems(), fetchMilestones()])
       setPosts(p)
-      setGallery(g)
+      setAlbums(a)
+      setAlbumItems(ai)
       setMilestones(m)
     } catch (err: any) {
       setLoadError(err.message)
@@ -88,60 +94,33 @@ export default function Home() {
     finally { setSavingId(null) }
   }
 
-  // === Gallery handlers ===
-  const handleSaveGallery = async (id: string) => {
+  // === Album handlers ===
+  const handleAlbumClick = async (albumId: string) => {
+    try {
+      const items = await fetchAlbumItems(albumId)
+      const lightboxItems = items.map(i => ({
+        type: i.file_type === 'video' ? 'video' as const : 'image' as const,
+        src: i.file_url,
+        coverUrl: i.cover_url,
+        alt: '',
+      }))
+      setLightboxItems(lightboxItems)
+      setLightboxIndex(0)
+      setLightboxOpen(true)
+    } catch (e: any) {
+      showMsg(e.message, 'error')
+    }
+  }
+
+  const handleSaveAlbum = async (id: string) => {
     setSavingId(id)
     try {
-      await updateGalleryPost(id, { description: editContent[id], date: editDate[id] })
-      setEditingGallery(null)
-      showMsg('Photo updated! 📸')
+      await updateAlbum(id, { description: editContent[id], date: editDate[id] })
+      setEditingAlbum(null)
+      showMsg('Album updated! 📸')
       await loadAll()
     } catch (e: any) { showMsg(e.message, 'error') }
     finally { setSavingId(null) }
-  }
-
-  const handleGalleryImageChange = async (id: string, url: string, coverUrl?: string) => {
-    try {
-      if (coverUrl) {
-        await updateGalleryPost(id, { video_url: url, cover_url: coverUrl })
-      } else {
-        await updateGalleryPost(id, { image_url: url })
-      }
-      showMsg('Photo replaced! 📸')
-      await loadAll()
-    } catch (e: any) { showMsg(e.message, 'error') }
-  }
-
-  const handleReplaceVideo = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingGallery(id)
-    try {
-      const url = await uploadFile(file, 'videos')
-      const coverBlob = await extractVideoFrame(file)
-      let coverUrl: string | null = null
-      if (coverBlob) {
-        const coverFile = new File([coverBlob], 'cover.jpg', { type: 'image/jpeg' })
-        coverUrl = await uploadFile(coverFile, 'covers')
-      }
-      await updateGalleryPost(id, { video_url: url, cover_url: coverUrl })
-      showMsg('Video updated! 🎬')
-      await loadAll()
-    } catch (e: any) { showMsg(e.message, 'error') }
-    finally { setUploadingGallery(null) }
-  }
-
-  const handleReplaceCover = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingGallery(id)
-    try {
-      const url = await uploadFile(file, 'covers')
-      await updateGalleryPost(id, { cover_url: url })
-      showMsg('Cover updated! 🖼️')
-      await loadAll()
-    } catch (e: any) { showMsg(e.message, 'error') }
-    finally { setUploadingGallery(null) }
   }
 
   // === Milestone handlers ===
@@ -168,7 +147,7 @@ export default function Home() {
       if (deleteTarget.type === 'post') {
         await getSupabaseClient().from('posts').delete().eq('id', deleteTarget.id)
       } else if (deleteTarget.type === 'gallery') {
-        await deleteGalleryPost(deleteTarget.id)
+        await deleteAlbum(deleteTarget.id)
       } else {
         await deleteMilestone(deleteTarget.id)
       }
@@ -184,10 +163,10 @@ export default function Home() {
     setEditingPost(p.id)
     setEditContent(prev => ({ ...prev, [p.id]: p.content }))
   }
-  const startEditGallery = (g: GalleryPost) => {
-    setEditingGallery(g.id)
-    setEditContent(prev => ({ ...prev, [g.id]: g.description }))
-    setEditDate(prev => ({ ...prev, [g.id]: g.date }))
+  const startEditAlbum = (a: GalleryAlbum) => {
+    setEditingAlbum(a.id)
+    setEditContent(prev => ({ ...prev, [a.id]: a.description }))
+    setEditDate(prev => ({ ...prev, [a.id]: a.date }))
   }
   const startEditMilestone = (m: Milestone) => {
     setEditingMilestone(m.id)
@@ -354,76 +333,58 @@ export default function Home() {
               </section>
             )}
 
-            {/* ====== Gallery Section ====== */}
+            {/* ====== Gallery Albums Section ====== */}
             <section className="mb-10">
               <h2 className="text-lg font-bold text-pink-500 mb-4 flex items-center gap-2">
                 <Camera className="w-5 h-5" /> 照片墙
               </h2>
-              {gallery.length === 0 ? (
-                <p className="text-center text-pink-300 italic">No photos yet...</p>
+              {albums.length === 0 ? (
+                <p className="text-center text-pink-300 italic">还没有相册...</p>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {gallery.slice(0, 6).map(g => (
-                    <div key={g.id} className="relative group">
-                      {user && (
-                        <div className="absolute top-2 right-2 z-10 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                          <AdminActions
-                            editing={editingGallery === g.id}
-                            saving={savingId === g.id}
-                            onEdit={() => startEditGallery(g)}
-                            onDelete={() => setDeleteTarget({ type: 'gallery', id: g.id })}
-                          />
-                        </div>
-                      )}
-                      <PhotoFrame
-                        src={g.image_url || '/placeholder.svg'}
-                        alt={g.description}
-                        editable={!!user}
-                        videoUrl={g.video_url}
-                        coverUrl={g.cover_url}
-                        onImageChange={url => handleGalleryImageChange(g.id, url)}
-                      />
-                      {editingGallery === g.id ? (
-                        <div className="mt-2 space-y-2">
-                          <input type="date" value={editDate[g.id] || ''}
-                            onChange={e => setEditDate(p => ({ ...p, [g.id]: e.target.value }))}
-                            className="w-full px-2 py-1 rounded-lg border border-pink-200 bg-white/60 
-                                       focus:outline-none focus:ring-2 focus:ring-pink-300 text-xs" />
-                          <input type="text" value={editContent[g.id] || ''}
-                            onChange={e => setEditContent(p => ({ ...p, [g.id]: e.target.value }))}
-                            className="w-full px-2 py-1 rounded-lg border border-pink-200 bg-white/60 
-                                       focus:outline-none focus:ring-2 focus:ring-pink-300 text-xs"
-                            placeholder="Description" />
-                          <div className="flex gap-2">
-                            <label className="flex-1 cursor-pointer">
-                              <div className="text-center text-xs bg-pink-50 rounded-lg py-2 border border-pink-200 hover:bg-pink-100 transition-colors">
-                                {uploadingGallery === g.id ? 'Uploading...' : g.video_url ? 'Replace Video' : 'Add Video'}
-                              </div>
-                              <input type="file" accept="video/mp4,video/quicktime,.mov"
-                                onChange={e => handleReplaceVideo(g.id, e)}
-                                className="hidden" />
-                            </label>
-                            {g.video_url && (
-                              <label className="flex-1 cursor-pointer">
-                                <div className="text-center text-xs bg-pink-50 rounded-lg py-2 border border-pink-200 hover:bg-pink-100 transition-colors">
-                                  {uploadingGallery === g.id ? '...' : 'Replace Cover'}
-                                </div>
-                                <input type="file" accept="image/*"
-                                  onChange={e => handleReplaceCover(g.id, e)}
-                                  className="hidden" />
-                              </label>
-                            )}
+                  {albums.map(a => {
+                    const aItems = albumItems.filter(i => i.album_id === a.id)
+                    const videoCount = aItems.filter(i => i.file_type === 'video').length
+                    return (
+                      <div key={a.id} className="relative group">
+                        {user && (
+                          <div className="absolute top-2 right-2 z-10 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                            <AdminActions
+                              editing={editingAlbum === a.id}
+                              saving={savingId === a.id}
+                              onEdit={() => startEditAlbum(a)}
+                              onDelete={() => setDeleteTarget({ type: 'gallery', id: a.id })}
+                            />
                           </div>
-                          <button onClick={() => handleSaveGallery(g.id)}
-                            className="w-full text-xs cute-button py-1">
-                            {savingId === g.id ? 'Saving...' : 'Save'}
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-gray-500 text-center mt-1">{g.date} · {g.description}</p>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                        <GalleryAlbumCard
+                          coverUrl={a.cover_url}
+                          description={a.description}
+                          date={a.date}
+                          itemCount={aItems.length}
+                          videoCount={videoCount}
+                          onClick={() => handleAlbumClick(a.id)}
+                        />
+                        {editingAlbum === a.id && (
+                          <div className="mt-2 space-y-2">
+                            <input type="date" value={editDate[a.id] || ''}
+                              onChange={e => setEditDate(p => ({ ...p, [a.id]: e.target.value }))}
+                              className="w-full px-2 py-1 rounded-lg border border-pink-200 bg-white/60 
+                                         focus:outline-none focus:ring-2 focus:ring-pink-300 text-xs" />
+                            <input type="text" value={editContent[a.id] || ''}
+                              onChange={e => setEditContent(p => ({ ...p, [a.id]: e.target.value }))}
+                              className="w-full px-2 py-1 rounded-lg border border-pink-200 bg-white/60 
+                                         focus:outline-none focus:ring-2 focus:ring-pink-300 text-xs"
+                              placeholder="Description" />
+                            <button onClick={() => handleSaveAlbum(a.id)}
+                              className="w-full text-xs cute-button py-1">
+                              {savingId === a.id ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </section>
@@ -441,6 +402,12 @@ export default function Home() {
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
       <CreatePostModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={loadAll} />
       {user && <FloatingAddButton onClick={() => setCreateOpen(true)} />}
+      <MediaLightbox
+        open={lightboxOpen}
+        items={lightboxItems}
+        initialIndex={lightboxIndex}
+        onClose={() => setLightboxOpen(false)}
+      />
       <CuteAlert
         open={alert.open}
         message={alert.message}
