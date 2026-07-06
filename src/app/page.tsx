@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import CuteCard from '@/components/CuteCard'
 import SweetButton from '@/components/SweetButton'
 import GalleryAlbumCard from '@/components/GalleryAlbumCard'
+import PhotoFrame from '@/components/PhotoFrame'
 import LoveTimer from '@/components/LoveTimer'
 import AdminActions from '@/components/AdminActions'
 import DeleteConfirmModal from '@/components/DeleteConfirmModal'
@@ -18,8 +19,9 @@ import { getSupabaseClient } from '@/lib/supabase'
 import { getPosts, updatePost, createPost, Post } from '@/lib/crud'
 import {
   fetchAlbums, fetchAllAlbumItems, deleteAlbum, fetchAlbumItems, updateAlbum,
+  fetchGallery, deleteGalleryPost,
   fetchMilestones, updateMilestone, deleteMilestone,
-  GalleryAlbum, GalleryItem, Milestone,
+  GalleryAlbum, GalleryItem, GalleryPost, Milestone,
 } from '@/lib/supabase-api'
 import {
   Heart, Camera, Sparkles, Save, Plus, LogIn, Unlock, Loader, AlertTriangle, Calendar, Star,
@@ -28,6 +30,7 @@ import {
 export default function Home() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
+  const [gallery, setGallery] = useState<GalleryPost[]>([])
   const [albums, setAlbums] = useState<GalleryAlbum[]>([])
   const [albumItems, setAlbumItems] = useState<GalleryItem[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
@@ -50,8 +53,14 @@ export default function Home() {
   const [lightboxItems, setLightboxItems] = useState<LightboxItem[]>([])
   const [lightboxIndex, setLightboxIndex] = useState(0)
 
+  const openLightbox = (item: LightboxItem) => {
+    setLightboxItems([item])
+    setLightboxIndex(0)
+    setLightboxOpen(true)
+  }
+
   // Delete confirmation
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'post' | 'gallery' | 'milestone'; id: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'post' | 'gallery_photo' | 'gallery_album' | 'milestone'; id: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   const showMsg = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
@@ -60,8 +69,11 @@ export default function Home() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [p, a, ai, m] = await Promise.all([getPosts(), fetchAlbums(), fetchAllAlbumItems(), fetchMilestones()])
+      const [p, g, a, ai, m] = await Promise.all([
+        getPosts(), fetchGallery(), fetchAlbums(), fetchAllAlbumItems(), fetchMilestones()
+      ])
       setPosts(p)
+      setGallery(g)
       setAlbums(a)
       setAlbumItems(ai)
       setMilestones(m)
@@ -146,7 +158,9 @@ export default function Home() {
     try {
       if (deleteTarget.type === 'post') {
         await getSupabaseClient().from('posts').delete().eq('id', deleteTarget.id)
-      } else if (deleteTarget.type === 'gallery') {
+      } else if (deleteTarget.type === 'gallery_photo') {
+        await deleteGalleryPost(deleteTarget.id)
+      } else if (deleteTarget.type === 'gallery_album') {
         await deleteAlbum(deleteTarget.id)
       } else {
         await deleteMilestone(deleteTarget.id)
@@ -338,7 +352,7 @@ export default function Home() {
               <h2 className="text-lg font-bold text-pink-500 mb-4 flex items-center gap-2">
                 <Camera className="w-5 h-5" /> 照片墙
               </h2>
-              {albums.length === 0 ? (
+              {albums.length === 0 && gallery.length === 0 ? (
                 <p className="text-center text-pink-300 italic">还没有相册...</p>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -353,7 +367,7 @@ export default function Home() {
                               editing={editingAlbum === a.id}
                               saving={savingId === a.id}
                               onEdit={() => startEditAlbum(a)}
-                              onDelete={() => setDeleteTarget({ type: 'gallery', id: a.id })}
+                              onDelete={() => setDeleteTarget({ type: 'gallery_album', id: a.id })}
                             />
                           </div>
                         )}
@@ -385,6 +399,29 @@ export default function Home() {
                       </div>
                     )
                   })}
+                  {/* Old single photos (gallery_posts) */}
+                  {gallery.map(gp => (
+                    <div key={gp.id} className="relative group">
+                      {user && (
+                        <div className="absolute top-2 right-2 z-10 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <AdminActions
+                            editing={false}
+                            saving={false}
+                            onEdit={() => {}}
+                            onDelete={() => setDeleteTarget({ type: 'gallery_photo', id: gp.id })}
+                          />
+                        </div>
+                      )}
+                      <PhotoFrame
+                        src={gp.image_url || '/placeholder.svg'}
+                        alt={gp.description}
+                        videoUrl={gp.video_url}
+                        coverUrl={gp.cover_url}
+                        onView={gp.video_url ? () => openLightbox({ type: 'video', src: gp.video_url!, coverUrl: gp.cover_url, alt: gp.description }) : () => openLightbox({ type: 'image', src: gp.image_url, alt: gp.description })}
+                      />
+                      <p className="text-xs text-gray-500 text-center mt-1">{gp.date} · {gp.description}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </section>
