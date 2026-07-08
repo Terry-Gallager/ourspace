@@ -77,6 +77,15 @@ ALTER TABLE gallery_posts ADD COLUMN IF NOT EXISTS cover_url TEXT;
 -- ============================================
 -- Phase 5: Gallery Albums (multiple items per entry)
 -- ============================================
+DROP POLICY IF EXISTS "Anyone can view albums" ON gallery_albums;
+DROP POLICY IF EXISTS "Authenticated users can insert albums" ON gallery_albums;
+DROP POLICY IF EXISTS "Authenticated users can update albums" ON gallery_albums;
+DROP POLICY IF EXISTS "Authenticated users can delete albums" ON gallery_albums;
+DROP POLICY IF EXISTS "Anyone can view items" ON gallery_items;
+DROP POLICY IF EXISTS "Authenticated users can insert items" ON gallery_items;
+DROP POLICY IF EXISTS "Authenticated users can update items" ON gallery_items;
+DROP POLICY IF EXISTS "Authenticated users can delete items" ON gallery_items;
+
 CREATE TABLE IF NOT EXISTS gallery_albums (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   cover_url TEXT NOT NULL DEFAULT '',
