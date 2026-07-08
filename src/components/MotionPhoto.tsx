@@ -20,28 +20,26 @@ export default function MotionPhoto({ src, videoUrl, alt, className = '', onView
     setPlaying(false)
   }, [videoUrl])
 
-  const handlePlay = async () => {
-    if (!videoUrl || !videoRef.current) return
+  // After playing becomes true (video element now visible), call play()
+  useEffect(() => {
+    if (!playing || !videoRef.current) return
     const el = videoRef.current
+    const play = async () => {
+      try {
+        await el.play()
+      } catch {
+        setPlaying(false)
+      }
+    }
+    play()
+  }, [playing])
+
+  const handlePlay = () => {
+    if (!videoUrl) return
     setPlaying(true)
-    if (el.readyState < 2) {
-      await new Promise<void>((resolve, reject) => {
-        const onReady = () => { el.removeEventListener('canplay', onReady); resolve() }
-        const onErr = () => { el.removeEventListener('canplay', onReady); reject() }
-        el.addEventListener('canplay', onReady)
-        el.addEventListener('error', onErr, { once: true })
-      })
-    }
-    try {
-      await el.play()
-    } catch {
-      setPlaying(false)
-    }
   }
 
-  const handleEnded = () => {
-    setPlaying(false)
-  }
+  const handleEnded = () => setPlaying(false)
 
   if (!videoUrl) {
     return (
@@ -53,21 +51,19 @@ export default function MotionPhoto({ src, videoUrl, alt, className = '', onView
 
   return (
     <div className={`relative w-full h-full overflow-hidden ${className}`}>
-      {/* Video element (always rendered, preloads even when invisible) */}
-      <div className={`absolute inset-0 z-10 transition-opacity duration-200 ${playing ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        <video
-          ref={videoRef}
-          src={videoUrl}
-          muted
-          playsInline
-          controls
-          preload="auto"
-          onEnded={handleEnded}
-          className="w-full h-full object-cover"
-        />
-      </div>
+      {/* Video element — always visible behind cover, preloads from the start */}
+      <video
+        ref={videoRef}
+        src={videoUrl}
+        muted
+        playsInline
+        controls
+        preload="auto"
+        onEnded={handleEnded}
+        className={`absolute inset-0 w-full h-full object-cover z-10 ${playing ? '' : 'invisible'}`}
+      />
 
-      {/* Cover image (on top when not playing) */}
+      {/* Cover image — overlays video when not playing */}
       <div
         className={`absolute inset-0 z-20 cursor-pointer ${playing ? 'hidden' : ''}`}
         onClick={handlePlay}
